@@ -2,6 +2,7 @@ package com.faction.gui;
 
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Desktop;
 
 import javax.swing.JFrame;
 import javax.swing.JPanel;
@@ -43,7 +44,9 @@ import java.awt.event.ActionListener;
 import java.awt.event.ActionEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.io.IOException;
 import java.io.UnsupportedEncodingException;
+import java.net.URISyntaxException;
 import java.net.URLEncoder;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -85,8 +88,6 @@ public class FactionGUI extends JPanel implements IExtensionStateListener, Exten
 	private Timer refreshTimer;
 	private String appId = "";
 	private JTable verTable;
-	private JTextField txtHttpsgithubcomfactionsecurityfaction;
-	private JTextField txtHttpswwwfactionsecuritycom;
 	private Logging logging;
 	private LinkedHashMap<String, Integer> levelMap = new LinkedHashMap<>();
 
@@ -111,12 +112,13 @@ public class FactionGUI extends JPanel implements IExtensionStateListener, Exten
 		JTabbedPane tabbedPane = new JTabbedPane(JTabbedPane.TOP);
 		contentPane.add(tabbedPane);
 
-				String [] severityStrings = factionApi.getSeverityStrings();
+		String [] severityStrings = factionApi.getSeverityStrings();
 		String vColumnNames[] = { "Start", "Name", "Vulnerability", "Severity", "VulnId" };
 		verModel = new FactionTableModel(vColumnNames);
 		Vector vvect = new Vector();
 		vvect.add("");vvect.add("");vvect.add("");vvect.add("");
 		verModel.addRow(vvect);
+		
 		String columnNames[] = { "AppId", "AppName", "Start Date", "EndDate" };
 		asmtModel = new FactionTableModel(columnNames);
 		Vector vect = new Vector();
@@ -144,11 +146,12 @@ public class FactionGUI extends JPanel implements IExtensionStateListener, Exten
 		gbc_scrollPane_3.gridx = 0;
 		gbc_scrollPane_3.gridy = 0;
 		panel_3.add(scrollPane_3, gbc_scrollPane_3);
-		
+		this.updateAPI();
 		verTable = new JTable();
 		verTable.setAutoCreateRowSorter(true);
 		verTable.setModel(verModel);
 		verTable.getRowSorter().toggleSortOrder(0);
+		verTable.setDefaultRenderer(Object.class, new CustomCellRenderer(this.levelMap));
 		verTable.getSelectionModel().addListSelectionListener(
 			new ListSelectionListener(){
         	public void valueChanged(ListSelectionEvent event) {
@@ -159,20 +162,6 @@ public class FactionGUI extends JPanel implements IExtensionStateListener, Exten
 			        	Long vid = (Long)verModel.getValueAt(row, 4);
 			        	JSONArray json = factionApi.executeGet("/assessments/vuln/" + vid);
 			        	JSONObject j = (JSONObject)json.get(0);
-			        	JSONArray s = (JSONArray)j.get("Steps");
-			        	List<String> Images = new ArrayList<String>();
-			        	List<String> Steps = new ArrayList<String>();
-			        	List<Integer>ImageIds = new ArrayList<Integer>();
-			        	for(int i=0; i< s.size(); i++){
-			        		JSONObject jObj = (JSONObject)s.get(i);
-			        		Steps.add((String)jObj.get("Description"));
-			        		Images.add((String)jObj.get("ScreenShot"));
-			        		if(jObj.get("ImageId")!= null)
-			        			ImageIds.add(((Long)jObj.get("ImageId")).intValue());
-			        		
-			        		
-			        	}
-			        	//com.fuse.data.Handler.install();
 			        	VulnerabilityDetailsPane test = new VulnerabilityDetailsPane(factionApi,(String)j.get("Name"), (String)j.get("Description"),(String)j.get("Recommendation"), (String)j.get("Details"), legacyCallback);
 			        	test.setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
 			        	test.setSize(900, 1000);
@@ -194,6 +183,8 @@ public class FactionGUI extends JPanel implements IExtensionStateListener, Exten
 		
 		JButton updateVerBtn = new JButton("Refresh");
 		panel_4.add(updateVerBtn);
+		JLabel btnVerDesc = new JLabel("Select a retest above to view its details");
+		panel_4.add(btnVerDesc);
 		
 		JPanel panel_5 = new JPanel();
 		combinedQueue.setLeftComponent(panel_5);
@@ -220,7 +211,7 @@ public class FactionGUI extends JPanel implements IExtensionStateListener, Exten
 		gbc_panel_6.gridy = 1;
 		panel_5.add(panel_6, gbc_panel_6);
 		
-		JButton btnNewButton = new JButton("Update");
+		JButton btnNewButton = new JButton("Refresh");
 		panel_6.add(btnNewButton);
 		btnNewButton.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent e) {
@@ -228,6 +219,9 @@ public class FactionGUI extends JPanel implements IExtensionStateListener, Exten
 
 			}
 		});
+		
+		JLabel btnDesc = new JLabel("Select an assessment above to update the assessment tab");
+		panel_6.add(btnDesc);
 
 		queueTable = new JTable();
 		queueTable.setAutoCreateRowSorter(true);
@@ -264,8 +258,8 @@ public class FactionGUI extends JPanel implements IExtensionStateListener, Exten
 						v.add(obj.get("OverallStr"));
 						v.add(obj.get("ImpactStr"));
 						v.add(obj.get("LikelyhoodStr"));
-						v.add(obj.get("Opened"));
-						v.add(obj.get("Closed"));
+						v.add(convertDate((String)obj.get("Opened")));
+						v.add(convertDate((String)obj.get("Closed")));
 						v.add(obj.get("Id"));
 						vulnModel.addRow(v);
 					}
@@ -414,72 +408,7 @@ public class FactionGUI extends JPanel implements IExtensionStateListener, Exten
 		vulnTable.getColumnModel().getColumn(5).setMaxWidth(250);
 		vulnTable.getColumnModel().getColumn(6).setMaxWidth(50);
 		
-		vulnTable.setDefaultRenderer(Object.class, new DefaultTableCellRenderer(){
-		    @Override
-		    public Component getTableCellRendererComponent(JTable table,
-		            Object value, boolean isSelected, boolean hasFocus, int row, int col) {
-		    	
-		        super.getTableCellRendererComponent(table, value, isSelected, hasFocus, row, col);
-		        int realRow = table.convertRowIndexToModel(row);
-		        
-		        String status = "" + table.getModel().getValueAt(realRow, col);
-				Integer sevId = levelMap.get(status.toLowerCase());
-				if(sevId == null){
-		        	if(row%2==0){
-			            setBackground(table.getBackground());  
-		        	}else{
-		        		setBackground(Color.getColor("EEEEEE"));
-		        	}
-		        	setForeground(table.getForeground());
-
-				}else{
-					switch(sevId) {
-						case 9: 
-							setBackground(Color.decode("#8E44AD"));
-							setForeground(Color.WHITE);
-							break;
-						case 8: 
-							setBackground(Color.decode("#8E44AD"));
-							setForeground(Color.WHITE);
-							break;
-						case 7: 
-							setBackground(Color.decode("#8E44AD"));
-							setForeground(Color.WHITE);
-							break;
-						case 6: 
-							setBackground(Color.decode("#8E44AD"));
-							setForeground(Color.WHITE);
-							break;
-						case 5: 
-							setBackground(Color.decode("#DD4B39"));
-							setForeground(Color.WHITE);
-							break;
-						case 4: 
-							setBackground(Color.decode("#F39C12"));
-							setForeground(Color.WHITE);
-							break;
-						case 3: 
-							setBackground(Color.decode("#00C0EF"));
-							setForeground(Color.WHITE);
-							break;
-						case 2: 
-							setBackground(Color.decode("#39CCCC"));
-							setForeground(Color.WHITE);
-							break;
-						case 1: 
-							setBackground(Color.decode("#00A65A"));
-							setForeground(Color.WHITE);
-							break;
-						default: 
-							setBackground(Color.decode("#95A5A6"));
-							setForeground(Color.WHITE);
-							break;
-					}
-
-				}
-		        return this;
-		    }   
-		});
+		vulnTable.setDefaultRenderer(Object.class, new CustomCellRenderer(this.levelMap) );
 		vulnTable.getSelectionModel().addListSelectionListener(
 			new ListSelectionListener(){
         	public void valueChanged(ListSelectionEvent event) {
@@ -522,7 +451,7 @@ public class FactionGUI extends JPanel implements IExtensionStateListener, Exten
 		ConfigPanel.add(tokenTxt);
 		tokenTxt.setColumns(10);
 		
-		JButton updateBtn = new JButton("Refresh");
+		JButton updateBtn = new JButton("Update");
 		updateBtn.addActionListener(new ActionListener() {
 			public void actionPerformed(ActionEvent arg0) {
 				factionApi.updateProps(serverTxt.getText(), tokenTxt.getText(), refreshRate.getText());
@@ -619,21 +548,39 @@ public class FactionGUI extends JPanel implements IExtensionStateListener, Exten
 				lblNewLabel_6.setBounds(514, 96, 61, 16);
 				ConfigPanel.add(lblNewLabel_6);
 				
-				txtHttpsgithubcomfactionsecurityfaction = new JTextField();
-				txtHttpsgithubcomfactionsecurityfaction.setText("https://github.com/factionsecurity/faction");
-				txtHttpsgithubcomfactionsecurityfaction.setBounds(587, 91, 439, 26);
-				ConfigPanel.add(txtHttpsgithubcomfactionsecurityfaction);
-				txtHttpsgithubcomfactionsecurityfaction.setColumns(10);
+				JButton btnGithub = new JButton();
+				btnGithub.setText("https://github.com/factionsecurity/faction");
+				btnGithub.setBounds(587, 91, 439, 26);
+				btnGithub.addActionListener(new ActionListener() {
+					public void actionPerformed(ActionEvent e) {
+						try {
+							Desktop.getDesktop().browse(new java.net.URL("https://github.com/factionsecurity/faction").toURI());
+						} catch (IOException | URISyntaxException e1) {
+							e1.printStackTrace();
+						}
+
+					}
+				});
+				ConfigPanel.add(btnGithub);
 				
 				JLabel lblNewLabel_7 = new JLabel("WebSite");
 				lblNewLabel_7.setBounds(514, 132, 61, 16);
 				ConfigPanel.add(lblNewLabel_7);
 				
-				txtHttpswwwfactionsecuritycom = new JTextField();
-				txtHttpswwwfactionsecuritycom.setText("https://www.factionsecurity.com");
-				txtHttpswwwfactionsecuritycom.setColumns(10);
-				txtHttpswwwfactionsecuritycom.setBounds(587, 127, 439, 26);
-				ConfigPanel.add(txtHttpswwwfactionsecuritycom);
+				JButton btnFaction = new JButton();
+				btnFaction.setText("https://www.factionsecurity.com");
+				btnFaction.setBounds(587, 127, 439, 26);
+				ConfigPanel.add(btnFaction);
+				btnFaction.addActionListener(new ActionListener() {
+					public void actionPerformed(ActionEvent e) {
+						try {
+							Desktop.getDesktop().browse(new java.net.URL("https://www.factionsecurity.com").toURI());
+						} catch (IOException | URISyntaxException e1) {
+							e1.printStackTrace();
+						}
+
+					}
+				});
 				
 				JLabel lblNewLabel_8 = new JLabel("Server Configuration");
 				lblNewLabel_8.setFont(new Font("Lucida Grande", Font.BOLD, 18));
@@ -658,7 +605,7 @@ public class FactionGUI extends JPanel implements IExtensionStateListener, Exten
 	private synchronized void  updateAPI() {
 		levelMap = factionApi.getLevelMap();	
 		/*
-		 * Get Verificaiton Queue
+		 * Get Verification Queue
 		 */
 		JSONArray vjson = factionApi.executeGet(FactionAPI.VQUEUE);
 		if(vjson != null){
@@ -748,8 +695,8 @@ public class FactionGUI extends JPanel implements IExtensionStateListener, Exten
         		v.add(obj.get("OverallStr"));
         		v.add(obj.get("ImpactStr"));
         		v.add(obj.get("LikelyhoodStr"));
-        		v.add(obj.get("Opened"));
-        		v.add(obj.get("Closed"));
+        		v.add(convertDate((String)obj.get("Opened")));
+        		v.add(convertDate((String)obj.get("Closed")));
         		v.add(obj.get("Id"));
         		boolean found=false;
         		

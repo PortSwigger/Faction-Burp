@@ -196,13 +196,23 @@ public class FactionAPI {
 
 	public JSONArray executePost(String targetURL, String postData) {
 		try {
-			logging.logToOutput("Sending Post");	
+			this.getProps();
+			if(this.SERVER == null || this.SERVER.trim().equals("") || !this.SERVER.startsWith("http")) {
+				return new JSONArray();
+			}
 			URL url = new URL(this.SERVER);
 			String targetHost = url.getHost();
 			String targetPath = url.getPath();
 			boolean isSecure = url.getProtocol().equals("https") ;
+			int port = url.getPort();
+			if(port == -1 && isSecure) {
+				port = 443;
+			}else if (port == -1) {
+				port = 80;
+			}
+			
 			HttpService service = HttpService
-					.httpService(targetHost, isSecure);
+					.httpService(targetHost, port, isSecure);
 			HttpRequest request = HttpRequest
 					.httpRequest()
 					.withService(service)
@@ -246,12 +256,22 @@ public class FactionAPI {
 
 	public JSONArray executeGet(String targetURL) {
 		try {
+			this.getProps();
+			if(this.SERVER == null || this.SERVER.trim().equals("") || !this.SERVER.startsWith("http")) {
+				return new JSONArray();
+			}
 			URL url = new URL(this.SERVER);
 			String targetHost = url.getHost();
 			String targetPath = url.getPath();
 			boolean isSecure = url.getProtocol().equals("https") ;
+			int port = url.getPort();
+			if(port == -1 && isSecure) {
+				port = 443;
+			}else if (port == -1) {
+				port = 80;
+			}
 			HttpService service = HttpService
-					.httpService(targetHost, isSecure);
+					.httpService(targetHost, port, isSecure);
 			HttpRequest request = HttpRequest
 					.httpRequest()
 					.withService(service)
@@ -287,8 +307,5 @@ public class FactionAPI {
 		}
 	}
 
-	public String getCSS() {
-		return SERVER.replace("api", "") + "service/rd_styles.css";
-	}
 
 }
